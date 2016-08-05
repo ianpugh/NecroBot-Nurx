@@ -11,6 +11,7 @@ using PoGo.NecroBot.Logic.State;
 using PoGo.NecroBot.Logic.Tasks;
 using PoGo.NecroBot.Logic.Utils;
 using System.IO;
+using PoGo.NecroBot.CLI.Nurx;
 
 #endregion
 
@@ -36,7 +37,8 @@ namespace PoGo.NecroBot.CLI
             if (args.Length > 0)
                 subPath = args[0];
 
-            Logger.SetLogger(new ConsoleLogger(LogLevel.Info), subPath);
+            var logger = new ConsoleLogger(LogLevel.Info);
+            Logger.SetLogger(logger, subPath);
             
             var settings = GlobalSettings.Load(subPath);
 
@@ -78,6 +80,13 @@ namespace PoGo.NecroBot.CLI
             var aggregator = new StatisticsAggregator(stats);
             var listener = new ConsoleEventListener();
             var websocket = new WebSocketInterface(settings.WebSocketPort, session);
+            var nurx = new NurxService(new NurxServiceStartInfo()
+            {
+                Session = session,
+                Settings = settings,
+                Logger = logger,
+                Statistics = stats,
+            });
 
             session.EventDispatcher.EventReceived += evt => listener.Listen(evt, session);
             session.EventDispatcher.EventReceived += evt => aggregator.Listen(evt, session);

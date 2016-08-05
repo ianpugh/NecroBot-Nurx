@@ -317,6 +317,14 @@ namespace PoGo.NecroBot.Logic
     public bool UsePokemonSniperFilterOnly;
     [DefaultValue(14251)]
     public int WebSocketPort;
+    [DefaultValue(false)]
+    public bool NurxEnabled;
+    [DefaultValue(14151)]
+    public int NurxWebSocketPort;
+    [DefaultValue("admin")]
+    public string NurxUsername;
+    [DefaultValue("")]
+    public string NurxPassword;
     public List<KeyValuePair<ItemId, int>> ItemRecycleFilter = new List<KeyValuePair<ItemId, int>>
         {
             new KeyValuePair<ItemId, int>(ItemId.ItemUnknown, 0),

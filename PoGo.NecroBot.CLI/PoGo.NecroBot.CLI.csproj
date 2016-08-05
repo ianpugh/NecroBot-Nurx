@@ -103,6 +103,16 @@
     <Compile Include="ConsoleEventListener.cs" />
     <Compile Include="ConsoleLogger.cs" />
     <Compile Include="Models\LoggingStrings.cs" />
+    <Compile Include="Nurx\INurxMessageResponder.cs" />
+    <Compile Include="Nurx\INurxMessageSender.cs" />
+    <Compile Include="Nurx\NurxCommand.cs" />
+    <Compile Include="Nurx\NurxService.cs" />
+    <Compile Include="Nurx\NurxServiceStartInfo.cs" />
+    <Compile Include="Nurx\SenderResponders\LocationSenderResponder.cs" />
+    <Compile Include="Nurx\SenderResponders\PokemonListSenderResponder.cs" />
+    <Compile Include="Nurx\SenderResponders\PokeStopSenderResponder.cs" />
+    <Compile Include="Nurx\SenderResponders\ProfileSenderResponder.cs" />
+    <Compile Include="Nurx\Senders\LogSender.cs" />
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -236,7 +246,9 @@
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
     </EmbeddedResource>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <Folder Include="Nurx\Responders\" />
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>
