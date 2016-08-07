@@ -21,6 +21,7 @@ namespace PoGo.NecroBot.Logic.Tasks
         public static async Task Execute(ISession session, CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            if (!session.LogicSettings.CatchPokemon) return;
 
             Logger.Write(session.Translation.GetTranslation(TranslationString.LookingForPokemon), LogLevel.Debug);
 
@@ -54,7 +55,7 @@ namespace PoGo.NecroBot.Logic.Tasks
                 var encounter =
                     await session.Client.Encounter.EncounterPokemon(pokemon.EncounterId, pokemon.SpawnPointId);
 
-                if (encounter.Status == EncounterResponse.Types.Status.EncounterSuccess)
+                if (encounter.Status == EncounterResponse.Types.Status.EncounterSuccess && session.LogicSettings.CatchPokemon)
                 {
                     await CatchPokemonTask.Execute(session, cancellationToken, encounter, pokemon);
                 }

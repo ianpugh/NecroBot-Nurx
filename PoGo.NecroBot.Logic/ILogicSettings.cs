@@ -71,6 +71,8 @@ namespace PoGo.NecroBot.Logic
 
     public interface ILogicSettings
     {
+        bool UseWebsocket { get; }
+        bool CatchPokemon { get; }
         bool TransferWeakPokemon { get; }
         bool DisableHumanWalking { get; }
         bool AutoUpdate { get; }
@@ -156,6 +158,7 @@ namespace PoGo.NecroBot.Logic
         bool SnipeIgnoreUnknownIv { get; }
         int MinDelayBetweenSnipes { get; }
         double SnipingScanOffset { get; }
+        bool SnipePokemonNotInPokedex { get; }
         int TotalAmountOfPokeballsToKeep { get; }
         int TotalAmountOfPotionsToKeep { get; }
         int TotalAmountOfRevivesToKeep { get; }

@@ -1,17 +1,39 @@
+<p align="center">
+  <a href="http://necrobot.io">
+    <img alt="Logo" src="http://necrobot.io/img/typotype-transparent.png" width="600">
+  </a>
+</p>
+
 [![Discord](https://img.shields.io/badge/discord-NECROBOT.IO-blue.svg)](https://discord.gg/VXKxNFr)
 [![Build status](https://ci.appveyor.com/api/projects/status/8ijvvr6b7fe2h0w2?svg=true)](https://ci.appveyor.com/project/NecronomiconCoding/necrobot)
 [![Stories in Ready](https://badge.waffle.io/NECROBOTIO/NecroBot.svg?label=ready&title=Ready)](https://waffle.io/NecronomiconCoding/NecroBot)
-[![Stories in Progress](https://badge.waffle.io/NECROBOTIO/NecroBot.svg?label=waffle%3Ain%20progress&title=In%20Progress)](https://waffle.io/NecronomiconCoding/NecroBot)
+[![Github All Releases](https://img.shields.io/github/downloads/NECROBOTIO/NecroBot/total.svg)](https://github.com/NECROBOTIO/NecroBot/releases)
 [![GitHub license](https://img.shields.io/badge/license-AGPL-blue.svg)](https://raw.githubusercontent.com/NecronomiconCoding/NecroBot/master/LICENSE.md)
-
-<!-- title -->
-<h1>NecroBot - a Pokemon Go Bot based on RocketAPI</h1>
-Official Website  http://necrobot.io
+[![Twitter Follow](https://img.shields.io/twitter/follow/NECROBOTIO.svg?style=social&label=Follow&maxAge=1)](https://twitter.com/NECROBOTIO)
 
 Discord (Chat & Get Help!): https://discord.gg/VXKxNFr <br/>
 <br/>
 
-<strong><em>UPDATE (8/4/2016)</em></strong> - Any program utilizing PoGO's API will not function. <strong>Read more [here](https://www.reddit.com/r/pokemongodev/comments/4w1cvr/pokemongo_current_api_status/)</strong>
+## NecroBot - the original For The Community, By The Community bot
+We are proud to announce the release of 0.7.2, with special thanks to Kevin and the entire crew involved at PGD!
+
+## This release features automatic Device ID generation
+You can now opt to leave the device values static and your device ID will not be the same as everyone elses. If you prefer to use your own device, you can do that as well! 
+
+To change the device information in /Config/auth.json to YOUR personal device, you will need android-sdk with adb (and drivers for your phone). Here are the correlating values with the command to run to grab the value off your phone:<br>
+"DeviceId": "", // adb.exe shell settings get secure android_id<br>
+"AndroidBoardName": "", // adb.exe shell getprop ro.product.board<br>
+"AndroidBootloader": "", // adb.exe shell getprop ro.boot.bootloader<br>
+"DeviceBrand": "", // adb.exe shell getprop ro.product.brand<br>
+"DeviceModel": "", // adb.exe shell getprop ro.product.model<br>
+"DeviceModelIdentifier": "", // adb.exe shell getprop ro.product.name<br>
+"DeviceModelBoot": "qcom",<br>
+"HardwareManufacturer": "", // adb.exe shell getprop ro.product.manufacturer<br>
+"HardwareModel": "", // adb.exe shell getprop ro.product.model<br>
+"FirmwareBrand": "", // adb.exe shell getprop ro.product.name<br>
+"FirmwareTags": "", // adb.exe shell getprop ro.build.tags<br>
+"FirmwareType": "", // adb.exe shell getprop ro.build.type<br>
+"FirmwareFingerprint": "" // adb.exe shell getprop ro.build.fingerprint
 
 <h2><a name="features">Features</a></h2>
 
@@ -41,7 +63,7 @@ Make sure you check out our [Wiki](https://github.com/NecronomiconCoding/NecroBo
 
 <h2><a name="donating">Donating</a></h2>
 <a name="paypal">Feel free to buy us all a beer, by using PayPal:</a><br/>
-[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=farhaninoor1%40gmail%2ecom&lc=GB&item_name=POGO%20Bot%20Donations&item_number=POGO&no_note=0&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG_global%2egif%3aNonHostedGuest)<br/>
+[![Donate](https://www.paypalobjects.com/en_US/i/btn/btn_donate_LG.gif)](https://www.paypal.com/cgi-bin/webscr?cmd=_donations&business=farhaninoor1%40gmail%2ecom&lc=GB&item_name=NecroBot%20Donations&item_number=POGO&no_note=0&currency_code=USD&bn=PP%2dDonationsBF%3abtn_donateCC_LG_global%2egif%3aNonHostedGuest)<br/>
 
 <a name="btc">or by using Bitcoin: *1LxBH4FHhwyEuL1eHbMvLiGsTiBrzjfa1C*</a><br/>
 
@@ -59,5 +81,6 @@ Thanks to everyone who volunteered by contributing via Pull Requests!
 This Website and Project is in no way affiliated with, authorized, maintained, sponsored or endorsed by Niantic, The Pokémon Company, Nintendo or any of its affiliates or subsidiaries. This is an independent and unofficial API for educational use ONLY. 
 Using the Project might be against the TOS
 
+Inquiries: contact@necrobot.io
 
 <hr/>

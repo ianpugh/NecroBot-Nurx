@@ -1,8 +1,12 @@
 #region using directives
 
+using GeoCoordinatePortable;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Converters;
+using PoGo.NecroBot.Logic.Common;
 using PoGo.NecroBot.Logic.Logging;
+using PoGo.NecroBot.Logic.State;
+using PoGo.NecroBot.Logic.Utils;
 using POGOProtos.Enums;
 using POGOProtos.Inventory.Item;
 using PokemonGo.RocketAPI;
@@ -13,321 +17,401 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 
 #endregion
 
 namespace PoGo.NecroBot.Logic
 {
-  internal class AuthSettings
-  {
-    [JsonIgnore]
-    private string _filePath;
-
-    public AuthType AuthType;
-    public string GoogleUsername;
-    public string GooglePassword;
-    public string PtcUsername;
-    public string PtcPassword;
-
-    public void Load(string path)
+    internal class AuthSettings
     {
-      try
-      {
-        _filePath = path;
+        [JsonIgnore]
+        private string _filePath;
 
-        if (File.Exists(_filePath))
+        public AuthType AuthType;
+        public string GoogleUsername;
+        public string GooglePassword;
+        public string PtcUsername;
+        public string PtcPassword;
+        public bool UseProxy;
+        public string UseProxyHost;
+        public string UseProxyPort;
+        public bool UseProxyAuthentication;
+        public string UseProxyUsername;
+        public string UseProxyPassword;
+        //devicedata
+        [DefaultValue("8525f5d8201f78b5")]
+        public string DeviceId;
+        [DefaultValue("msm8994")]
+        public string AndroidBoardName;
+        [DefaultValue("unknown")]
+        public string AndroidBootloader;
+        [DefaultValue("OnePlus")]
+        public string DeviceBrand;
+        [DefaultValue("OnePlus2")]
+        public string DeviceModel;
+        [DefaultValue("ONE A2003_24_160604")]
+        public string DeviceModelIdentifier;
+        [DefaultValue("qcom")]
+        public string DeviceModelBoot;
+        [DefaultValue("OnePlus")]
+        public string HardwareManufacturer;
+        [DefaultValue("ONE A2003")]
+        public string HardwareModel;
+        [DefaultValue("OnePlus2")]
+        public string FirmwareBrand;
+        [DefaultValue("dev-keys")]
+        public string FirmwareTags;
+        [DefaultValue("user")]
+        public string FirmwareType;
+        [DefaultValue("OnePlus/OnePlus2/OnePlus2:6.0.1/MMB29M/1447840820:user/release-keys")]
+        public string FirmwareFingerprint;
+
+        public AuthSettings()
         {
-          //if the file exists, load the settings
-          var input = File.ReadAllText(_filePath);
-
-          var settings = new JsonSerializerSettings();
-          settings.Converters.Add(new StringEnumConverter { CamelCaseText = true });
-
-          JsonConvert.PopulateObject(input, this, settings);
+            InitializePropertyDefaultValues(this);
         }
-        else
+
+        public void InitializePropertyDefaultValues(object obj)
         {
-          Save(_filePath);
+            FieldInfo[] fields = obj.GetType().GetFields();
+
+            foreach (FieldInfo field in fields)
+            {
+                var d = field.GetCustomAttribute<DefaultValueAttribute>();
+
+                if (d != null)
+                    field.SetValue(obj, d.Value);
+            }
         }
-      }
-      catch (JsonReaderException exception)
-      {
-        if (exception.Message.Contains("Unexpected character") && exception.Message.Contains("PtcUsername"))
-          Logger.Write("JSON Exception: You need to properly configure your PtcUsername using quotations.",
-              LogLevel.Error);
-        else if (exception.Message.Contains("Unexpected character") && exception.Message.Contains("PtcPassword"))
-          Logger.Write(
-              "JSON Exception: You need to properly configure your PtcPassword using quotations.",
-              LogLevel.Error);
-        else if (exception.Message.Contains("Unexpected character") &&
-                 exception.Message.Contains("GoogleUsername"))
-          Logger.Write(
-              "JSON Exception: You need to properly configure your GoogleUsername using quotations.",
-              LogLevel.Error);
-        else if (exception.Message.Contains("Unexpected character") &&
-                 exception.Message.Contains("GooglePassword"))
-          Logger.Write(
-              "JSON Exception: You need to properly configure your GooglePassword using quotations.",
-              LogLevel.Error);
-        else
-          Logger.Write("JSON Exception: " + exception.Message, LogLevel.Error);
-      }
+
+        public void Load( string path )
+        {
+            try
+            {
+                _filePath = path;
+
+                if( File.Exists( _filePath ) )
+                {
+                    //if the file exists, load the settings
+                    var input = File.ReadAllText( _filePath );
+
+                    var settings = new JsonSerializerSettings();
+                    settings.Converters.Add( new StringEnumConverter { CamelCaseText = true } );
+                    JsonConvert.PopulateObject( input, this, settings );
+
+                    if (this.DeviceId == "8525f5d8201f78b5")
+                        this.DeviceId = this.RandomString(16);
+                }
+
+                Save( _filePath );
+            }
+            catch( JsonReaderException exception )
+            {
+                if( exception.Message.Contains( "Unexpected character" ) && exception.Message.Contains( "PtcUsername" ) )
+                    Logger.Write( "JSON Exception: You need to properly configure your PtcUsername using quotations.",
+                        LogLevel.Error );
+                else if( exception.Message.Contains( "Unexpected character" ) && exception.Message.Contains( "PtcPassword" ) )
+                    Logger.Write(
+                        "JSON Exception: You need to properly configure your PtcPassword using quotations.",
+                        LogLevel.Error );
+                else if( exception.Message.Contains( "Unexpected character" ) &&
+                         exception.Message.Contains( "GoogleUsername" ) )
+                    Logger.Write(
+                        "JSON Exception: You need to properly configure your GoogleUsername using quotations.",
+                        LogLevel.Error );
+                else if( exception.Message.Contains( "Unexpected character" ) &&
+                         exception.Message.Contains( "GooglePassword" ) )
+                    Logger.Write(
+                        "JSON Exception: You need to properly configure your GooglePassword using quotations.",
+                        LogLevel.Error );
+                else
+                    Logger.Write( "JSON Exception: " + exception.Message, LogLevel.Error );
+            }
+        }
+
+        public void Save(string fullPath)
+        {
+            var jsonSerializeSettings = new JsonSerializerSettings
+            {
+                DefaultValueHandling = DefaultValueHandling.Include,
+                Formatting = Formatting.Indented,
+                Converters = new JsonConverter[] { new StringEnumConverter { CamelCaseText = true } }
+            };
+
+            var output = JsonConvert.SerializeObject(this, jsonSerializeSettings);
+
+            var folder = Path.GetDirectoryName(fullPath);
+            if (folder != null && !Directory.Exists(folder))
+            {
+                Directory.CreateDirectory(folder);
+            }
+
+            File.WriteAllText(fullPath, output);
+        }
+
+        public void Save()
+        {
+            if( !string.IsNullOrEmpty( _filePath ) )
+            {
+                Save( _filePath );
+            }
+        }
+
+        private string RandomString(int length, string alphabet = "abcdefghijklmnopqrstuvwxyz0123456789")
+        {
+            var outOfRange = Byte.MaxValue + 1 - (Byte.MaxValue + 1) % alphabet.Length;
+
+            return string.Concat(
+                Enumerable
+                    .Repeat(0, Int32.MaxValue)
+                    .Select(e => this.RandomByte())
+                    .Where(randomByte => randomByte < outOfRange)
+                    .Take(length)
+                    .Select(randomByte => alphabet[randomByte % alphabet.Length])
+            );
+        }
+
+        private byte RandomByte()
+        {
+            using (var randomizationProvider = new RNGCryptoServiceProvider())
+            {
+                var randomBytes = new byte[1];
+                randomizationProvider.GetBytes(randomBytes);
+                return randomBytes.Single();
+            }
+        }
     }
 
-    public void Save(string path)
+    public class GlobalSettings
     {
-      var output = JsonConvert.SerializeObject(this, Formatting.Indented,
-          new StringEnumConverter { CamelCaseText = true });
+        [JsonIgnore]
+        internal AuthSettings Auth = new AuthSettings();
+        [JsonIgnore]
+        public string GeneralConfigPath;
+        [JsonIgnore]
+        public string ProfileConfigPath;
+        [JsonIgnore]
+        public string ProfilePath;
 
-      var folder = Path.GetDirectoryName(path);
-      if (folder != null && !Directory.Exists(folder))
-      {
-        Directory.CreateDirectory(folder);
-      }
+        [JsonIgnore]
+        public bool isGui;
 
-      File.WriteAllText(path, output);
-    }
-
-    public void Save()
-    {
-      if (!string.IsNullOrEmpty(_filePath))
-      {
-        Save(_filePath);
-      }
-    }
-  }
-
-  public class GlobalSettings
-  {
-
-    [JsonIgnore]
-    internal AuthSettings Auth = new AuthSettings();
-    [JsonIgnore]
-    public string GeneralConfigPath;
-    [JsonIgnore]
-    public string ProfileConfigPath;
-    [JsonIgnore]
-    public string ProfilePath;
-
-    [DefaultValue("en")]
-    public string TranslationLanguageCode;
-    //autoupdate
-    [DefaultValue(true)]
-    public bool AutoUpdate;
-    [DefaultValue(true)]
-    public bool TransferConfigAndAuthOnUpdate;
-    //pressakeyshit
-    [DefaultValue(false)]
-    public bool StartupWelcomeDelay;
-    //console options
-    [DefaultValue(10)]
-    public int AmountOfPokemonToDisplayOnStart;
-    [DefaultValue(true)]
-    public bool ShowPokeballCountsBeforeRecycle;
-    //powerup
-    [DefaultValue(false)]
-    public bool AutomaticallyLevelUpPokemon;
-    [DefaultValue(5)]
-    public int AmountOfTimesToUpgradeLoop;
-    [DefaultValue(5000)]
-    public int GetMinStarDustForLevelUp;
-    [DefaultValue("iv")]
-    public string LevelUpByCPorIv;
-    [DefaultValue(1000)]
-    public float UpgradePokemonCpMinimum;
-    [DefaultValue(95)]
-    public float UpgradePokemonIvMinimum;
-    [DefaultValue("and")]
-    public string UpgradePokemonMinimumStatsOperator;
-    //position
-    [DefaultValue(false)]
-    public bool DisableHumanWalking;
-    [DefaultValue(10)]
-    public double DefaultAltitude;
-    [DefaultValue(40.778915)]
-    public double DefaultLatitude;
-    [DefaultValue(-73.962277)]
-    public double DefaultLongitude;
-    [DefaultValue(31.0)]
-    public double WalkingSpeedInKilometerPerHour;
-    [DefaultValue(10)]
-    public int MaxSpawnLocationOffset;
-    //delays
-    [DefaultValue(5000)]
-    public int DelayBetweenPlayerActions;
-    [DefaultValue(2000)]
-    public int DelayBetweenPokemonCatch;
-    //dump stats
-    [DefaultValue(false)]
-    public bool DumpPokemonStats;
-    //evolve
-    [DefaultValue(95)]
-    public float EvolveAboveIvValue;
-    [DefaultValue(false)]
-    public bool EvolveAllPokemonAboveIv;
-    [DefaultValue(true)]
-    public bool EvolveAllPokemonWithEnoughCandy;
-    [DefaultValue(90.0)]
-    public double EvolveKeptPokemonsAtStorageUsagePercentage;
-    [DefaultValue(false)]
-    public bool KeepPokemonsThatCanEvolve;
-    //keeping
-    [DefaultValue(1250)]
-    public int KeepMinCp;
-    [DefaultValue(90)]
-    public float KeepMinIvPercentage;
-    [DefaultValue(6)]
-    public int KeepMinLvl;
-    [DefaultValue("or")]
-    public string KeepMinOperator;
-    [DefaultValue(false)]
-    public bool UseKeepMinLvl;
-    [DefaultValue(false)]
-    public bool PrioritizeIvOverCp;
-    [DefaultValue(1)]
-    public int KeepMinDuplicatePokemon;
-    //gpx
-    [DefaultValue(false)]
-    public bool UseGpxPathing;
-    [DefaultValue("GPXPath.GPX")]
-    public string GpxFile;
-    //recycle
-    [DefaultValue(true)]
-    public bool VerboseRecycling;
-    [DefaultValue(90.0)]
-    public double RecycleInventoryAtUsagePercentage;
-    //lucky, incense and berries
-    [DefaultValue(true)]
-    public bool UseEggIncubators;
-    [DefaultValue(false)]
-    public bool UseLuckyEggConstantly;
-    [DefaultValue(30)]
-    public int UseLuckyEggsMinPokemonAmount;
-    [DefaultValue(false)]
-    public bool UseLuckyEggsWhileEvolving;
-    [DefaultValue(false)]
-    public bool UseIncenseConstantly;
-    [DefaultValue(1000)]
-    public int UseBerriesMinCp;
-    [DefaultValue(90)]
-    public float UseBerriesMinIv;
-    [DefaultValue(0.20)]
-    public double UseBerriesBelowCatchProbability;
-    [DefaultValue("and")]
-    public string UseBerriesOperator;
-    //snipe
-    [DefaultValue(true)]
-    public bool UseSnipeOnlineLocationServer;
-    [DefaultValue(false)]
-    public bool UseSnipeLocationServer;
-    [DefaultValue("localhost")]
-    public string SnipeLocationServer;
-    [DefaultValue(16969)]
-    public int SnipeLocationServerPort;
-    [DefaultValue(true)]
-    public bool GetSniperInfoFromPokezz;
-    [DefaultValue(true)]
-    public bool GetOnlyVerifiedSniperInfoFromPokezz;
-    [DefaultValue(20)]
-    public int MinPokeballsToSnipe;
-    [DefaultValue(0)]
-    public int MinPokeballsWhileSnipe;
-    [DefaultValue(60000)]
-    public int MinDelayBetweenSnipes;
-    [DefaultValue(0.003)]
-    public double SnipingScanOffset;
-    [DefaultValue(false)]
-    public bool SnipeAtPokestops;
-    [DefaultValue(false)]
-    public bool SnipeIgnoreUnknownIv;
-    [DefaultValue(false)]
-    public bool UseTransferIvForSnipe;
-    //rename
-    [DefaultValue(false)]
-    public bool RenamePokemon;
-    [DefaultValue(true)]
-    public bool RenameOnlyAboveIv;
-    [DefaultValue("{1}_{0}")]
-    public string RenameTemplate;
-    //amounts
-    [DefaultValue(6)]
-    public int MaxPokeballsPerPokemon;
-    [DefaultValue(1000)]
-    public int MaxTravelDistanceInMeters;
-    [DefaultValue(120)]
-    public int TotalAmountOfPokeballsToKeep;
-    [DefaultValue(80)]
-    public int TotalAmountOfPotionsToKeep;
-    [DefaultValue(60)]
-    public int TotalAmountOfRevivesToKeep;
-    [DefaultValue(50)]
-    public int TotalAmountOfBerriesToKeep;
-    //balls
-    [DefaultValue(1000)]
-    public int UseGreatBallAboveCp;
-    [DefaultValue(1250)]
-    public int UseUltraBallAboveCp;
-    [DefaultValue(1500)]
-    public int UseMasterBallAboveCp;
-    [DefaultValue(85.0)]
-    public double UseGreatBallAboveIv;
-    [DefaultValue(95.0)]
-    public double UseUltraBallAboveIv;
-    [DefaultValue(0.2)]
-    public double UseGreatBallBelowCatchProbability;
-    [DefaultValue(0.1)]
-    public double UseUltraBallBelowCatchProbability;
-    [DefaultValue(0.05)]
-    public double UseMasterBallBelowCatchProbability;
-    //customizable catch
-    [DefaultValue(false)]
-    public bool EnableHumanizedThrows;
-    [DefaultValue(40)]
-    public int NiceThrowChance;
-    [DefaultValue(30)]
-    public int GreatThrowChance;
-    [DefaultValue(10)]
-    public int ExcellentThrowChance;
-    [DefaultValue(90)]
-    public int CurveThrowChance;
-    [DefaultValue(90.00)]
-    public double ForceGreatThrowOverIv;
-    [DefaultValue(95.00)]
-    public double ForceExcellentThrowOverIv;
-    [DefaultValue(1000)]
-    public int ForceGreatThrowOverCp;
-    [DefaultValue(1500)]
-    public int ForceExcellentThrowOverCp;
-    //transfer
-    [DefaultValue(false)]
-    public bool TransferWeakPokemon;
-    [DefaultValue(true)]
-    public bool TransferDuplicatePokemon;
-    [DefaultValue(true)]
-    public bool TransferDuplicatePokemonOnCapture;
-    //favorite
-    [DefaultValue(95)]
-    public float FavoriteMinIvPercentage;
-    [DefaultValue(false)]
-    public bool AutoFavoritePokemon;
-    //notcatch
-    [DefaultValue(false)]
-    public bool UsePokemonToNotCatchFilter;
-    [DefaultValue(false)]
-    public bool UsePokemonSniperFilterOnly;
-    [DefaultValue(14251)]
-    public int WebSocketPort;
-
-    [DefaultValue(false)]
-    public bool NurxEnabled;
-    [DefaultValue(14151)]
-    public int NurxWebSocketPort;
-    [DefaultValue("admin")]
-    public string NurxUsername;
-    [DefaultValue("")]
-    public string NurxPassword;
-
-    public List<KeyValuePair<ItemId, int>> ItemRecycleFilter = new List<KeyValuePair<ItemId, int>>
+        [DefaultValue("en")]
+        public string TranslationLanguageCode;
+        //autoupdate
+        [DefaultValue(true)]
+        public bool AutoUpdate;
+        [DefaultValue(true)]
+        public bool TransferConfigAndAuthOnUpdate;
+        //websockets
+        [DefaultValue(false)]
+        public bool UseWebsocket;
+        //pressakeyshit
+        [DefaultValue(false)]
+        public bool StartupWelcomeDelay;
+        //console options
+        [DefaultValue(10)]
+        public int AmountOfPokemonToDisplayOnStart;
+        [DefaultValue(true)]
+        public bool ShowPokeballCountsBeforeRecycle;
+        //pokemon
+        [DefaultValue(true)]
+        public bool CatchPokemon;
+        //powerup
+        [DefaultValue(false)]
+        public bool AutomaticallyLevelUpPokemon;
+        [DefaultValue(5)]
+        public int AmountOfTimesToUpgradeLoop;
+        [DefaultValue(5000)]
+        public int GetMinStarDustForLevelUp;
+        [DefaultValue("iv")]
+        public string LevelUpByCPorIv;
+        [DefaultValue(1000)]
+        public float UpgradePokemonCpMinimum;
+        [DefaultValue(95)]
+        public float UpgradePokemonIvMinimum;
+        [DefaultValue("and")]
+        public string UpgradePokemonMinimumStatsOperator;
+        //position
+        [DefaultValue(false)]
+        public bool DisableHumanWalking;
+        [DefaultValue(40.778915)]
+        public double DefaultLatitude;
+        [DefaultValue(-73.962277)]
+        public double DefaultLongitude;
+        [DefaultValue(31.0)]
+        public double WalkingSpeedInKilometerPerHour;
+        [DefaultValue(10)]
+        public int MaxSpawnLocationOffset;
+        //delays
+        [DefaultValue(5000)]
+        public int DelayBetweenPlayerActions;
+        [DefaultValue(2000)]
+        public int DelayBetweenPokemonCatch;
+        //dump stats
+        [DefaultValue(false)]
+        public bool DumpPokemonStats;
+        //evolve
+        [DefaultValue(95)]
+        public float EvolveAboveIvValue;
+        [DefaultValue(false)]
+        public bool EvolveAllPokemonAboveIv;
+        [DefaultValue(true)]
+        public bool EvolveAllPokemonWithEnoughCandy;
+        [DefaultValue(90.0)]
+        public double EvolveKeptPokemonsAtStorageUsagePercentage;
+        [DefaultValue(false)]
+        public bool KeepPokemonsThatCanEvolve;
+        //keeping
+        [DefaultValue(1250)]
+        public int KeepMinCp;
+        [DefaultValue(90)]
+        public float KeepMinIvPercentage;
+        [DefaultValue(6)]
+        public int KeepMinLvl;
+        [DefaultValue("or")]
+        public string KeepMinOperator;
+        [DefaultValue(false)]
+        public bool UseKeepMinLvl;
+        [DefaultValue(false)]
+        public bool PrioritizeIvOverCp;
+        [DefaultValue(1)]
+        public int KeepMinDuplicatePokemon;
+        //gpx
+        [DefaultValue(false)]
+        public bool UseGpxPathing;
+        [DefaultValue("GPXPath.GPX")]
+        public string GpxFile;
+        //recycle
+        [DefaultValue(true)]
+        public bool VerboseRecycling;
+        [DefaultValue(90.0)]
+        public double RecycleInventoryAtUsagePercentage;
+        //lucky, incense and berries
+        [DefaultValue(true)]
+        public bool UseEggIncubators;
+        [DefaultValue(false)]
+        public bool UseLuckyEggConstantly;
+        [DefaultValue(30)]
+        public int UseLuckyEggsMinPokemonAmount;
+        [DefaultValue(false)]
+        public bool UseLuckyEggsWhileEvolving;
+        [DefaultValue(false)]
+        public bool UseIncenseConstantly;
+        [DefaultValue(1000)]
+        public int UseBerriesMinCp;
+        [DefaultValue(90)]
+        public float UseBerriesMinIv;
+        [DefaultValue(0.20)]
+        public double UseBerriesBelowCatchProbability;
+        [DefaultValue("and")]
+        public string UseBerriesOperator;
+        //snipe
+        [DefaultValue(true)]
+        public bool UseSnipeOnlineLocationServer;
+        [DefaultValue(false)]
+        public bool UseSnipeLocationServer;
+        [DefaultValue("localhost")]
+        public string SnipeLocationServer;
+        [DefaultValue(16969)]
+        public int SnipeLocationServerPort;
+        [DefaultValue(true)]
+        public bool GetSniperInfoFromPokezz;
+        [DefaultValue(true)]
+        public bool GetOnlyVerifiedSniperInfoFromPokezz;
+        [DefaultValue(20)]
+        public int MinPokeballsToSnipe;
+        [DefaultValue(0)]
+        public int MinPokeballsWhileSnipe;
+        [DefaultValue(60000)]
+        public int MinDelayBetweenSnipes;
+        [DefaultValue(0.003)]
+        public double SnipingScanOffset;
+        [DefaultValue(false)]
+        public bool SnipeAtPokestops;
+        [DefaultValue(false)]
+        public bool SnipeIgnoreUnknownIv;
+        [DefaultValue(false)]
+        public bool UseTransferIvForSnipe;
+        [DefaultValue(false)]
+        public bool SnipePokemonNotInPokedex;
+        //rename
+        [DefaultValue(false)]
+        public bool RenamePokemon;
+        [DefaultValue(true)]
+        public bool RenameOnlyAboveIv;
+        [DefaultValue("{1}_{0}")]
+        public string RenameTemplate;
+        //amounts
+        [DefaultValue(6)]
+        public int MaxPokeballsPerPokemon;
+        [DefaultValue(1000)]
+        public int MaxTravelDistanceInMeters;
+        [DefaultValue(120)]
+        public int TotalAmountOfPokeballsToKeep;
+        [DefaultValue(80)]
+        public int TotalAmountOfPotionsToKeep;
+        [DefaultValue(60)]
+        public int TotalAmountOfRevivesToKeep;
+        [DefaultValue(50)]
+        public int TotalAmountOfBerriesToKeep;
+        //balls
+        [DefaultValue(1000)]
+        public int UseGreatBallAboveCp;
+        [DefaultValue(1250)]
+        public int UseUltraBallAboveCp;
+        [DefaultValue(1500)]
+        public int UseMasterBallAboveCp;
+        [DefaultValue(85.0)]
+        public double UseGreatBallAboveIv;
+        [DefaultValue(95.0)]
+        public double UseUltraBallAboveIv;
+        [DefaultValue(0.2)]
+        public double UseGreatBallBelowCatchProbability;
+        [DefaultValue(0.1)]
+        public double UseUltraBallBelowCatchProbability;
+        [DefaultValue(0.05)]
+        public double UseMasterBallBelowCatchProbability;
+        //customizable catch
+        [DefaultValue(false)]
+        public bool EnableHumanizedThrows;
+        [DefaultValue(40)]
+        public int NiceThrowChance;
+        [DefaultValue(30)]
+        public int GreatThrowChance;
+        [DefaultValue(10)]
+        public int ExcellentThrowChance;
+        [DefaultValue(90)]
+        public int CurveThrowChance;
+        [DefaultValue(90.00)]
+        public double ForceGreatThrowOverIv;
+        [DefaultValue(95.00)]
+        public double ForceExcellentThrowOverIv;
+        [DefaultValue(1000)]
+        public int ForceGreatThrowOverCp;
+        [DefaultValue(1500)]
+        public int ForceExcellentThrowOverCp;
+        //transfer
+        [DefaultValue(false)]
+        public bool TransferWeakPokemon;
+        [DefaultValue(true)]
+        public bool TransferDuplicatePokemon;
+        [DefaultValue(true)]
+        public bool TransferDuplicatePokemonOnCapture;
+        //favorite
+        [DefaultValue(95)]
+        public float FavoriteMinIvPercentage;
+        [DefaultValue(false)]
+        public bool AutoFavoritePokemon;
+        //notcatch
+        [DefaultValue(false)]
+        public bool UsePokemonToNotCatchFilter;
+        [DefaultValue(false)]
+        public bool UsePokemonSniperFilterOnly;
+        [DefaultValue(14251)]
+        public int WebSocketPort;
+        public List<KeyValuePair<ItemId, int>> ItemRecycleFilter = new List<KeyValuePair<ItemId, int>>
         {
             new KeyValuePair<ItemId, int>(ItemId.ItemUnknown, 0),
             new KeyValuePair<ItemId, int>(ItemId.ItemLuckyEgg, 200),
@@ -346,7 +430,7 @@ namespace PoGo.NecroBot.Logic
             new KeyValuePair<ItemId, int>(ItemId.ItemItemStorageUpgrade, 100)
         };
 
-    public List<PokemonId> PokemonsNotToTransfer = new List<PokemonId>
+        public List<PokemonId> PokemonsNotToTransfer = new List<PokemonId>
         {
             //criteria: from SS Tier to A Tier + Regional Exclusive
             PokemonId.Venusaur,
@@ -387,7 +471,7 @@ namespace PoGo.NecroBot.Logic
             PokemonId.Mew
         };
 
-    public List<PokemonId> PokemonsToEvolve = new List<PokemonId>
+        public List<PokemonId> PokemonsToEvolve = new List<PokemonId>
         {
             /*NOTE: keep all the end-of-line commas exept for the last one or an exception will be thrown!
             criteria: 12 candies*/
@@ -426,7 +510,7 @@ namespace PoGo.NecroBot.Logic
             //PokemonId.Staryu
         };
 
-    public List<PokemonId> PokemonsToIgnore = new List<PokemonId>
+        public List<PokemonId> PokemonsToIgnore = new List<PokemonId>
         {
             //criteria: most common
             PokemonId.Caterpie,
@@ -438,7 +522,7 @@ namespace PoGo.NecroBot.Logic
             PokemonId.Doduo
         };
 
-    public Dictionary<PokemonId, TransferFilter> PokemonsTransferFilter = new Dictionary<PokemonId, TransferFilter>
+        public Dictionary<PokemonId, TransferFilter> PokemonsTransferFilter = new Dictionary<PokemonId, TransferFilter>
         {
             //criteria: based on NY Central Park and Tokyo variety + sniping optimization
             {PokemonId.Golduck, new TransferFilter(1800, 6, false, 95, "or", 1)},
@@ -466,16 +550,16 @@ namespace PoGo.NecroBot.Logic
             {PokemonId.Dragonite, new TransferFilter(2600, 6, false, 90, "or", 1)}
         };
 
-    public SnipeSettings PokemonToSnipe = new SnipeSettings
-    {
-      Locations = new List<Location>
+        public SnipeSettings PokemonToSnipe = new SnipeSettings
+        {
+            Locations = new List<Location>
             {
                 new Location(38.55680748646112, -121.2383794784546), //Dratini Spot
                 new Location(-33.85901900, 151.21309800), //Magikarp Spot
                 new Location(47.5014969, -122.0959568), //Eevee Spot
                 new Location(51.5025343, -0.2055027) //Charmender Spot
             },
-      Pokemon = new List<PokemonId>
+            Pokemon = new List<PokemonId>
             {
                 PokemonId.Venusaur,
                 PokemonId.Charizard,
@@ -532,9 +616,9 @@ namespace PoGo.NecroBot.Logic
                 PokemonId.Mewtwo,
                 PokemonId.Mew
             }
-    };
+        };
 
-    public List<PokemonId> PokemonToUseMasterball = new List<PokemonId>
+        public List<PokemonId> PokemonToUseMasterball = new List<PokemonId>
         {
             PokemonId.Articuno,
             PokemonId.Zapdos,
@@ -543,444 +627,622 @@ namespace PoGo.NecroBot.Logic
             PokemonId.Mewtwo
         };
 
-    public GlobalSettings()
-    {
-      InitializePropertyDefaultValues(this);
-    }
-
-    public void InitializePropertyDefaultValues(object obj)
-    {
-      FieldInfo[] fields = obj.GetType().GetFields();
-
-      foreach (FieldInfo field in fields)
-      {
-        var d = field.GetCustomAttribute<DefaultValueAttribute>();
-
-        if (d != null)
-          field.SetValue(obj, d.Value);
-      }
-    }
-
-    public static GlobalSettings Default => new GlobalSettings();
-
-    public static GlobalSettings Load(string path)
-    {
-      GlobalSettings settings;
-      var profilePath = Path.Combine(Directory.GetCurrentDirectory(), path);
-      var profileConfigPath = Path.Combine(profilePath, "config");
-      var configFile = Path.Combine(profileConfigPath, "config.json");
-      var shouldExit = false;
-
-      if (File.Exists(configFile))
-      {
-        try
+        public GlobalSettings()
         {
-          //if the file exists, load the settings
-          var input = File.ReadAllText(configFile);
-
-          var jsonSettings = new JsonSerializerSettings();
-          jsonSettings.Converters.Add(new StringEnumConverter { CamelCaseText = true });
-          jsonSettings.ObjectCreationHandling = ObjectCreationHandling.Replace;
-          jsonSettings.DefaultValueHandling = DefaultValueHandling.Populate;
-
-          settings = JsonConvert.DeserializeObject<GlobalSettings>(input, jsonSettings);
-
-          //This makes sure that existing config files dont get null values which lead to an exception
-          foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.KeepMinOperator == null))
-          {
-            filter.Value.KeepMinOperator = "or";
-          }
-          foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.Moves == null))
-          {
-            filter.Value.Moves = new List<PokemonMove>();
-          }
-          foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.MovesOperator == null))
-          {
-            filter.Value.MovesOperator = "or";
-          }
-
+            InitializePropertyDefaultValues( this );
         }
-        catch (JsonReaderException exception)
+
+        public void InitializePropertyDefaultValues( object obj )
         {
-          Logger.Write("JSON Exception: " + exception.Message, LogLevel.Error);
-          return null;
+            FieldInfo[] fields = obj.GetType().GetFields();
+
+            foreach( FieldInfo field in fields )
+            {
+                var d = field.GetCustomAttribute<DefaultValueAttribute>();
+
+                if( d != null )
+                    field.SetValue( obj, d.Value );
+            }
         }
-      }
-      else
-      {
-        Logger.Write("This is your first start, would you like to begin setup? Y/N", LogLevel.Warning);
 
-        bool boolBreak = false;
-        settings = new GlobalSettings();
-
-        while (!boolBreak)
+        public static GlobalSettings Default => new GlobalSettings();
+        
+        public static GlobalSettings Load( string path, bool boolSkipSave = false )
         {
-          string strInput = Console.ReadLine().ToLower();
+            GlobalSettings settings = null;
+            bool isGui = (AppDomain.CurrentDomain.GetAssemblies().SingleOrDefault(a => a.FullName.Contains("PoGo.NecroBot.GUI")) != null);
+            var profilePath = Path.Combine(Directory.GetCurrentDirectory(), path);
+            var profileConfigPath = Path.Combine(profilePath, "config");
+            var configFile = Path.Combine(profileConfigPath, "config.json");
+            var shouldExit = false;
 
-          switch (strInput)
-          {
-            case "y":
-              boolBreak = true;
-              SetupSettings(settings);
-              break;
-            case "n":
-              Logger.Write("Config/Auth file automatically generated and must be completed before continuing");
-              boolBreak = true;
-              shouldExit = true;
-              break;
-            default:
-              Logger.Write("[INPUT ERROR] Error with input, please enter 'y' or 'n'", LogLevel.Error);
-              continue;
-          }
+            if( File.Exists( configFile ) )
+            {
+                try
+                {
+                    //if the file exists, load the settings
+                    var input = File.ReadAllText( configFile );
+
+                    var jsonSettings = new JsonSerializerSettings();
+                    jsonSettings.Converters.Add( new StringEnumConverter { CamelCaseText = true } );
+                    jsonSettings.ObjectCreationHandling = ObjectCreationHandling.Replace;
+                    jsonSettings.DefaultValueHandling = DefaultValueHandling.Populate;
+
+                    settings = JsonConvert.DeserializeObject<GlobalSettings>( input, jsonSettings );
+
+                    //This makes sure that existing config files dont get null values which lead to an exception
+                    foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.KeepMinOperator == null))
+                    {
+                        filter.Value.KeepMinOperator = "or";
+                    }
+                    foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.Moves == null))
+                    {
+                        filter.Value.Moves = new List<PokemonMove>();
+                    }
+                    foreach (var filter in settings.PokemonsTransferFilter.Where(x => x.Value.MovesOperator == null))
+                    {
+                        filter.Value.MovesOperator = "or";
+                    }
+                }
+                catch( JsonReaderException exception )
+                {
+                    Logger.Write( "JSON Exception: " + exception.Message, LogLevel.Error );
+                    return null;
+                }
+            }
+            else
+            {
+                settings = new GlobalSettings();
+                shouldExit = true;
+            }
+
+
+            settings.ProfilePath = profilePath;
+            settings.ProfileConfigPath = profileConfigPath;
+            settings.GeneralConfigPath = Path.Combine( Directory.GetCurrentDirectory(), "config" );
+            settings.isGui = isGui;
+            settings.migratePercentages();
+
+            if( !boolSkipSave || !settings.AutoUpdate )
+            {
+                settings.Save( configFile );
+                settings.Auth.Load( Path.Combine( profileConfigPath, "auth.json" ) );
+            }
+
+            return shouldExit ? null : settings;
         }
-      }
 
-
-      settings.ProfilePath = profilePath;
-      settings.ProfileConfigPath = profileConfigPath;
-      settings.GeneralConfigPath = Path.Combine(Directory.GetCurrentDirectory(), "config");
-      settings.migratePercentages();
-
-      settings.Save(configFile);
-      settings.Auth.Load(Path.Combine(profileConfigPath, "auth.json"));
-
-      return shouldExit ? null : settings;
-    }
-
-    private static void SetupSettings(GlobalSettings settings)
-    {
-      SetupAccountType(settings);
-      SetupUserAccount(settings);
-      SetupConfig(settings);
-
-      Logger.Write("### COMPLETED SETUP ###", LogLevel.None);
-    }
-
-    private static void SetupAccountType(GlobalSettings settings)
-    {
-      string strInput;
-      Logger.Write("### Setting up new USER ACCOUNT ###", LogLevel.None);
-      Logger.Write("Please choose an account type: google/ptc");
-
-      while (true)
-      {
-        strInput = Console.ReadLine().ToLower();
-
-        switch (strInput)
+        public static bool PromptForSetup( ITranslation translator )
         {
-          case "google":
-            settings.Auth.AuthType = AuthType.Google;
-            Logger.Write("Chosen Account Type: GOOGLE");
-            return;
-          case "ptc":
-            settings.Auth.AuthType = AuthType.Ptc;
-            Logger.Write("Chosen Account Type: PTC");
-            return;
-          default:
-            Logger.Write("[ERROR] submitted an incorrect account type, please choose 'google' or 'ptc'", LogLevel.Error);
-            break;
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartPrompt, "Y", "N" ), LogLevel.Warning );
+
+            while( true )
+            {
+                string strInput = Console.ReadLine().ToLower();
+
+                switch( strInput )
+                {
+                    case "y":
+                        return true;
+                    case "n":
+                        Logger.Write( translator.GetTranslation( TranslationString.FirstStartAutoGenSettings ) );
+                        return false;
+                    default:
+                        Logger.Write( translator.GetTranslation( TranslationString.PromptError, "Y", "N" ), LogLevel.Error );
+                        continue;
+                }
+            }
         }
-      }
-    }
-
-    private static void SetupUserAccount(GlobalSettings settings)
-    {
-      Console.WriteLine("");
-      Logger.Write("Please enter a Username", LogLevel.None);
-      string strInput = Console.ReadLine();
-
-      if (settings.Auth.AuthType == AuthType.Google)
-        settings.Auth.GoogleUsername = strInput;
-      else
-        settings.Auth.PtcUsername = strInput;
-      Logger.Write("Accepted username: " + strInput);
-
-      Console.WriteLine("");
-      Logger.Write("Please enter a Password", LogLevel.None);
-      strInput = Console.ReadLine();
-
-      if (settings.Auth.AuthType == AuthType.Google)
-        settings.Auth.GooglePassword = strInput;
-      else
-        settings.Auth.PtcPassword = strInput;
-      Logger.Write("Accepted password: " + strInput);
-
-      Logger.Write("### User Account Completed ###\n", LogLevel.None);
-    }
-
-    private static void SetupConfig(GlobalSettings settings)
-    {
-      Logger.Write("### Setting Default Position ###", LogLevel.None);
-      Logger.Write("Please enter a Latitude (Right click to paste)");
-      while (true)
-      {
-        try
+        
+        public static Session SetupSettings( Session session, GlobalSettings settings, String configPath )
         {
-          double dblInput = double.Parse(Console.ReadLine());
-          settings.DefaultLatitude = dblInput;
-          Logger.Write("Lattitude accepted: " + dblInput);
-          break;
+            Session newSession = SetupTranslationCode( session, session.Translation, settings );
+
+            SetupAccountType( newSession.Translation, settings );
+            SetupUserAccount( newSession.Translation, settings );
+            SetupConfig( newSession.Translation, settings );
+            SaveFiles( settings, configPath );
+
+            Logger.Write( session.Translation.GetTranslation( TranslationString.FirstStartSetupCompleted ), LogLevel.None );
+
+            return newSession;
         }
-        catch (FormatException)
+
+        private static Session SetupTranslationCode( Session session, ITranslation translator, GlobalSettings settings )
         {
-          Logger.Write("[ERROR] Please input only a VALUE for example: " + settings.DefaultLatitude, LogLevel.Error);
-          continue;
-        }
-      }
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartLanguagePrompt, "Y", "N" ), LogLevel.None );
+            string strInput;
 
-      Logger.Write("Please enter a Longitude (Right click to paste)");
-      while (true)
-      {
-        try
+            bool boolBreak = false;
+            while( !boolBreak )
+            {
+                strInput = Console.ReadLine().ToLower();
+
+                switch( strInput )
+                {
+                    case "y":
+                        boolBreak = true;
+                        break;
+                    case "n":
+                        return session;
+                    default:
+                        Logger.Write( translator.GetTranslation( TranslationString.PromptError, "y", "n" ), LogLevel.Error );
+                        continue;
+                }
+            }
+
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartLanguageCodePrompt ) );
+            strInput = Console.ReadLine();
+
+            settings.TranslationLanguageCode = strInput;
+            session = new Session( new ClientSettings( settings ), new LogicSettings( settings ) );
+            translator = session.Translation;
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartLanguageConfirm, strInput ) );
+
+            return session;
+        }
+
+
+        private static void SetupAccountType( ITranslation translator, GlobalSettings settings )
         {
-          double dblInput = double.Parse(Console.ReadLine());
-          settings.DefaultLongitude = dblInput;
-          Logger.Write("Longitude accepted: " + dblInput);
-          break;
+            string strInput;
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupAccount ), LogLevel.None );
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupTypePrompt, "google", "ptc" ) );
+
+            while( true )
+            {
+                strInput = Console.ReadLine().ToLower();
+
+                switch( strInput )
+                {
+                    case "google":
+                        settings.Auth.AuthType = AuthType.Google;
+                        Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupTypeConfirm, "GOOGLE" ) );
+                        return;
+                    case "ptc":
+                        settings.Auth.AuthType = AuthType.Ptc;
+                        Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupTypeConfirm, "PTC" ) );
+                        return;
+                    default:
+                        Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupTypePromptError, "google", "ptc" ), LogLevel.Error );
+                        break;
+                }
+            }
         }
-        catch (FormatException)
+
+        private static void SetupUserAccount( ITranslation translator, GlobalSettings settings )
         {
-          Logger.Write("[ERROR] Please input only a VALUE for example: " + settings.DefaultLongitude, LogLevel.Error);
-          continue;
+            Console.WriteLine( "" );
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupUsernamePrompt ), LogLevel.None );
+            string strInput = Console.ReadLine();
+
+            if( settings.Auth.AuthType == AuthType.Google )
+                settings.Auth.GoogleUsername = strInput;
+            else
+                settings.Auth.PtcUsername = strInput;
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupUsernameConfirm, strInput ) );
+
+            Console.WriteLine( "" );
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupPasswordPrompt ), LogLevel.None );
+            strInput = Console.ReadLine();
+
+            if( settings.Auth.AuthType == AuthType.Google )
+                settings.Auth.GooglePassword = strInput;
+            else
+                settings.Auth.PtcPassword = strInput;
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupPasswordConfirm, strInput ) );
+
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartAccountCompleted ), LogLevel.None );
         }
-      }
+
+        private static void SetupConfig( ITranslation translator, GlobalSettings settings )
+        {
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartDefaultLocationPrompt, "Y", "N" ), LogLevel.None );
+
+            bool boolBreak = false;
+            while( !boolBreak )
+            {
+                string strInput = Console.ReadLine().ToLower();
+
+                switch( strInput )
+                {
+                    case "y":
+                        boolBreak = true;
+                        break;
+                    case "n":
+                        Logger.Write( translator.GetTranslation( TranslationString.FirstStartDefaultLocationSet ) );
+                        return;
+                    default:
+                        // PROMPT ERROR \\
+                        Logger.Write( translator.GetTranslation( TranslationString.PromptError, "y", "n" ), LogLevel.Error );
+                        continue;
+                }
+            }
+
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartDefaultLocation ), LogLevel.None );
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLatPrompt ) );
+            while( true )
+            {
+                try
+                {
+                    double dblInput = double.Parse( Console.ReadLine() );
+                    settings.DefaultLatitude = dblInput;
+                    Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLatConfirm, dblInput ) );
+                    break;
+                }
+                catch( FormatException )
+                {
+                    Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLocationError, settings.DefaultLatitude, LogLevel.Error ) );
+                    continue;
+                }
+            }
+
+            Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLongPrompt ) );
+            while( true )
+            {
+                try
+                {
+                    double dblInput = double.Parse( Console.ReadLine() );
+                    settings.DefaultLongitude = dblInput;
+                    Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLongConfirm, dblInput ) );
+                    break;
+                }
+                catch( FormatException )
+                {
+                    Logger.Write( translator.GetTranslation( TranslationString.FirstStartSetupDefaultLocationError, settings.DefaultLongitude, LogLevel.Error ) );
+                    continue;
+                }
+            }
+        }
+
+        private static void SaveFiles( GlobalSettings settings, String configFile )
+        {
+            settings.Save( configFile );
+            settings.Auth.Load( Path.Combine( settings.ProfileConfigPath, "auth.json" ) );
+        }
+
+
+        /// <summary>
+        /// Method for issue #1966
+        /// </summary>
+        private void migratePercentages()
+        {
+            if( EvolveKeptPokemonsAtStorageUsagePercentage <= 1.0 )
+            {
+                EvolveKeptPokemonsAtStorageUsagePercentage *= 100.0f;
+            }
+            if( RecycleInventoryAtUsagePercentage <= 1.0 )
+            {
+                RecycleInventoryAtUsagePercentage *= 100.0f;
+            }
+        }
+
+        public void Save( string fullPath )
+        {
+            var jsonSerializeSettings = new JsonSerializerSettings
+            {
+                DefaultValueHandling = DefaultValueHandling.Include,
+                Formatting = Formatting.Indented,
+                Converters = new JsonConverter[] { new StringEnumConverter { CamelCaseText = true } }
+            };
+
+            var output = JsonConvert.SerializeObject( this, jsonSerializeSettings );
+
+            var folder = Path.GetDirectoryName( fullPath );
+            if( folder != null && !Directory.Exists( folder ) )
+            {
+                Directory.CreateDirectory( folder );
+            }
+
+            File.WriteAllText( fullPath, output );
+        }
     }
 
-
-    /// <summary>
-    /// Method for issue #1966
-    /// </summary>
-    private void migratePercentages()
+    public class ClientSettings : ISettings
     {
-      if (EvolveKeptPokemonsAtStorageUsagePercentage <= 1.0)
-      {
-        EvolveKeptPokemonsAtStorageUsagePercentage *= 100.0f;
-      }
-      if (RecycleInventoryAtUsagePercentage <= 1.0)
-      {
-        RecycleInventoryAtUsagePercentage *= 100.0f;
-      }
+        // Never spawn at the same position.
+        private readonly Random _rand = new Random();
+        private readonly GlobalSettings _settings;
+
+        public ClientSettings( GlobalSettings settings )
+        {
+            _settings = settings;
+        }
+
+
+        public string GoogleUsername => _settings.Auth.GoogleUsername;
+        public string GooglePassword => _settings.Auth.GooglePassword;
+
+        public bool UseProxy
+        {
+            get { return _settings.Auth.UseProxy; }
+            set { _settings.Auth.UseProxy = value; }
+        }
+
+        public string UseProxyHost
+        {
+            get { return _settings.Auth.UseProxyHost; }
+            set { _settings.Auth.UseProxyHost = value; }
+        }
+
+        public string UseProxyPort
+        {
+            get { return _settings.Auth.UseProxyPort; }
+            set { _settings.Auth.UseProxyPort = value; }
+        }
+
+        public bool UseProxyAuthentication
+        {
+            get { return _settings.Auth.UseProxyAuthentication; }
+            set { _settings.Auth.UseProxyAuthentication = value; }
+        }
+
+        public string UseProxyUsername
+        {
+            get { return _settings.Auth.UseProxyUsername; }
+            set { _settings.Auth.UseProxyUsername = value; }
+        }
+
+        public string UseProxyPassword
+        {
+            get { return _settings.Auth.UseProxyPassword; }
+            set { _settings.Auth.UseProxyPassword = value; }
+        }
+
+        public string GoogleRefreshToken
+        {
+            get { return null; }
+            set { GoogleRefreshToken = null; }
+        }
+        AuthType ISettings.AuthType
+        {
+            get { return _settings.Auth.AuthType; }
+
+            set { _settings.Auth.AuthType = value; }
+        }
+
+        string ISettings.DeviceId
+        {
+            get { return _settings.Auth.DeviceId; }
+            set { _settings.Auth.DeviceId = value; }
+        }
+        string ISettings.AndroidBoardName
+        {
+            get { return _settings.Auth.AndroidBoardName; }
+            set { _settings.Auth.AndroidBoardName = value; }
+        }
+        string ISettings.AndroidBootloader
+        {
+            get { return _settings.Auth.AndroidBootloader; }
+            set { _settings.Auth.AndroidBootloader = value; }
+        }
+        string ISettings.DeviceBrand
+        {
+            get { return _settings.Auth.DeviceBrand; }
+            set { _settings.Auth.DeviceBrand = value; }
+        }
+        string ISettings.DeviceModel
+        {
+            get { return _settings.Auth.DeviceModel; }
+            set { _settings.Auth.DeviceModel = value; }
+        }
+        string ISettings.DeviceModelIdentifier
+        {
+            get { return _settings.Auth.DeviceModelIdentifier; }
+            set { _settings.Auth.DeviceModelIdentifier = value; }
+        }
+        string ISettings.DeviceModelBoot
+        {
+            get { return _settings.Auth.DeviceModelBoot; }
+            set { _settings.Auth.DeviceModelBoot = value; }
+        }
+        string ISettings.HardwareManufacturer
+        {
+            get { return _settings.Auth.HardwareManufacturer; }
+            set { _settings.Auth.HardwareManufacturer = value; }
+        }
+        string ISettings.HardwareModel
+        {
+            get { return _settings.Auth.HardwareModel; }
+            set { _settings.Auth.HardwareModel = value; }
+        }
+        string ISettings.FirmwareBrand
+        {
+            get { return _settings.Auth.FirmwareBrand; }
+            set { _settings.Auth.FirmwareBrand = value; }
+        }
+        string ISettings.FirmwareTags
+        {
+            get { return _settings.Auth.FirmwareTags; }
+            set { _settings.Auth.FirmwareTags = value; }
+        }
+        string ISettings.FirmwareType
+        {
+            get { return _settings.Auth.FirmwareType; }
+            set { _settings.Auth.FirmwareType = value; }
+        }
+        string ISettings.FirmwareFingerprint
+        {
+            get { return _settings.Auth.FirmwareFingerprint; }
+            set { _settings.Auth.FirmwareFingerprint = value; }
+        }
+        double ISettings.DefaultLatitude
+        {
+            get
+            {
+                return _settings.DefaultLatitude + _rand.NextDouble() * ( (double) _settings.MaxSpawnLocationOffset / 111111 );
+            }
+
+            set { _settings.DefaultLatitude = value; }
+        }
+
+        double ISettings.DefaultLongitude
+        {
+            get
+            {
+                return _settings.DefaultLongitude +
+                       _rand.NextDouble() *
+                       ( (double) _settings.MaxSpawnLocationOffset / 111111 / Math.Cos( _settings.DefaultLatitude ) );
+            }
+
+            set { _settings.DefaultLongitude = value; }
+        }
+
+        double ISettings.DefaultAltitude
+        {
+            get
+            {
+                return
+                    LocationUtils.getElevation(_settings.DefaultLatitude, _settings.DefaultLongitude) +
+                    _rand.NextDouble() *
+                    ((double)5 / Math.Cos(LocationUtils.getElevation(_settings.DefaultLatitude, _settings.DefaultLongitude)));
+            }
+            
+
+            set {}
+        }
+
+        string ISettings.GoogleUsername
+        {
+            get { return _settings.Auth.GoogleUsername; }
+
+            set { _settings.Auth.GoogleUsername = value; }
+        }
+
+        string ISettings.GooglePassword
+        {
+            get { return _settings.Auth.GooglePassword; }
+
+            set { _settings.Auth.GooglePassword = value; }
+        }
+
+        string ISettings.PtcUsername
+        {
+            get { return _settings.Auth.PtcUsername; }
+
+            set { _settings.Auth.PtcUsername = value; }
+        }
+
+        string ISettings.PtcPassword
+        {
+            get { return _settings.Auth.PtcPassword; }
+
+            set { _settings.Auth.PtcPassword = value; }
+        }
     }
 
-    public void Save(string fullPath)
+    public class LogicSettings : ILogicSettings
     {
-      var jsonSerializeSettings = new JsonSerializerSettings
-      {
-        DefaultValueHandling = DefaultValueHandling.Include,
-        Formatting = Formatting.Indented,
-        Converters = new JsonConverter[] { new StringEnumConverter { CamelCaseText = true } }
-      };
+        private readonly GlobalSettings _settings;
 
-      var output = JsonConvert.SerializeObject(this, jsonSerializeSettings);
+        public LogicSettings( GlobalSettings settings )
 
-      var folder = Path.GetDirectoryName(fullPath);
-      if (folder != null && !Directory.Exists(folder))
-      {
-        Directory.CreateDirectory(folder);
-      }
+        {
+            _settings = settings;
+        }
 
-      File.WriteAllText(fullPath, output);
+        public string ProfilePath => _settings.ProfilePath;
+        public string ProfileConfigPath => _settings.ProfileConfigPath;
+        public string GeneralConfigPath => _settings.GeneralConfigPath;
+        public bool AutoUpdate => _settings.AutoUpdate;
+        public bool TransferConfigAndAuthOnUpdate => _settings.TransferConfigAndAuthOnUpdate;
+        public bool UseWebsocket => _settings.UseWebsocket;
+        public bool CatchPokemon => _settings.CatchPokemon;
+        public bool TransferWeakPokemon => _settings.TransferWeakPokemon;
+        public bool DisableHumanWalking => _settings.DisableHumanWalking;
+        public float KeepMinIvPercentage => _settings.KeepMinIvPercentage;
+        public string KeepMinOperator => _settings.KeepMinOperator;
+        public int KeepMinCp => _settings.KeepMinCp;
+        public int KeepMinLvl => _settings.KeepMinLvl;
+        public bool UseKeepMinLvl => _settings.UseKeepMinLvl;
+        public bool AutomaticallyLevelUpPokemon => _settings.AutomaticallyLevelUpPokemon;
+        public int AmountOfTimesToUpgradeLoop => _settings.AmountOfTimesToUpgradeLoop;
+        public string LevelUpByCPorIv => _settings.LevelUpByCPorIv;
+        public int GetMinStarDustForLevelUp => _settings.GetMinStarDustForLevelUp;
+        public bool UseLuckyEggConstantly => _settings.UseLuckyEggConstantly;
+        public bool UseIncenseConstantly => _settings.UseIncenseConstantly;
+        public int UseBerriesMinCp => _settings.UseBerriesMinCp;
+        public float UseBerriesMinIv => _settings.UseBerriesMinIv;
+        public double UseBerriesBelowCatchProbability => _settings.UseBerriesBelowCatchProbability;
+        public string UseBerriesOperator => _settings.UseBerriesOperator;
+        public float UpgradePokemonIvMinimum => _settings.UpgradePokemonIvMinimum;
+        public float UpgradePokemonCpMinimum => _settings.UpgradePokemonCpMinimum;
+        public string UpgradePokemonMinimumStatsOperator => _settings.UpgradePokemonMinimumStatsOperator;
+        public double WalkingSpeedInKilometerPerHour => _settings.WalkingSpeedInKilometerPerHour;
+        public bool EvolveAllPokemonWithEnoughCandy => _settings.EvolveAllPokemonWithEnoughCandy;
+        public bool KeepPokemonsThatCanEvolve => _settings.KeepPokemonsThatCanEvolve;
+        public bool TransferDuplicatePokemon => _settings.TransferDuplicatePokemon;
+        public bool TransferDuplicatePokemonOnCapture => _settings.TransferDuplicatePokemonOnCapture;
+        public bool UseEggIncubators => _settings.UseEggIncubators;
+        public int UseGreatBallAboveCp => _settings.UseGreatBallAboveCp;
+        public int UseUltraBallAboveCp => _settings.UseUltraBallAboveCp;
+        public int UseMasterBallAboveCp => _settings.UseMasterBallAboveCp;
+        public double UseGreatBallAboveIv => _settings.UseGreatBallAboveIv;
+        public double UseUltraBallAboveIv => _settings.UseUltraBallAboveIv;
+        public double UseMasterBallBelowCatchProbability => _settings.UseMasterBallBelowCatchProbability;
+        public double UseUltraBallBelowCatchProbability => _settings.UseUltraBallBelowCatchProbability;
+        public double UseGreatBallBelowCatchProbability => _settings.UseGreatBallBelowCatchProbability;
+        public bool EnableHumanizedThrows => _settings.EnableHumanizedThrows;
+        public int NiceThrowChance => _settings.NiceThrowChance;
+        public int GreatThrowChance => _settings.GreatThrowChance;
+        public int ExcellentThrowChance => _settings.ExcellentThrowChance;
+        public int CurveThrowChance => _settings.CurveThrowChance;
+        public double ForceGreatThrowOverIv => _settings.ForceGreatThrowOverIv;
+        public double ForceExcellentThrowOverIv => _settings.ForceExcellentThrowOverIv;
+        public int ForceGreatThrowOverCp => _settings.ForceGreatThrowOverCp;
+        public int ForceExcellentThrowOverCp => _settings.ForceExcellentThrowOverCp;
+        public int DelayBetweenPokemonCatch => _settings.DelayBetweenPokemonCatch;
+        public int DelayBetweenPlayerActions => _settings.DelayBetweenPlayerActions;
+        public bool UsePokemonToNotCatchFilter => _settings.UsePokemonToNotCatchFilter;
+        public bool UsePokemonSniperFilterOnly => _settings.UsePokemonSniperFilterOnly;
+        public int KeepMinDuplicatePokemon => _settings.KeepMinDuplicatePokemon;
+        public bool PrioritizeIvOverCp => _settings.PrioritizeIvOverCp;
+        public int MaxTravelDistanceInMeters => _settings.MaxTravelDistanceInMeters;
+        public string GpxFile => _settings.GpxFile;
+        public bool UseGpxPathing => _settings.UseGpxPathing;
+        public bool UseLuckyEggsWhileEvolving => _settings.UseLuckyEggsWhileEvolving;
+        public int UseLuckyEggsMinPokemonAmount => _settings.UseLuckyEggsMinPokemonAmount;
+        public bool EvolveAllPokemonAboveIv => _settings.EvolveAllPokemonAboveIv;
+        public float EvolveAboveIvValue => _settings.EvolveAboveIvValue;
+        public bool RenamePokemon => _settings.RenamePokemon;
+        public bool RenameOnlyAboveIv => _settings.RenameOnlyAboveIv;
+        public float FavoriteMinIvPercentage => _settings.FavoriteMinIvPercentage;
+        public bool AutoFavoritePokemon => _settings.AutoFavoritePokemon;
+        public string RenameTemplate => _settings.RenameTemplate;
+        public int AmountOfPokemonToDisplayOnStart => _settings.AmountOfPokemonToDisplayOnStart;
+        public bool DumpPokemonStats => _settings.DumpPokemonStats;
+        public string TranslationLanguageCode => _settings.TranslationLanguageCode;
+        public bool ShowPokeballCountsBeforeRecycle => _settings.ShowPokeballCountsBeforeRecycle;
+        public bool VerboseRecycling => _settings.VerboseRecycling;
+        public double RecycleInventoryAtUsagePercentage => _settings.RecycleInventoryAtUsagePercentage;
+        public double EvolveKeptPokemonsAtStorageUsagePercentage => _settings.EvolveKeptPokemonsAtStorageUsagePercentage;
+        public ICollection<KeyValuePair<ItemId, int>> ItemRecycleFilter => _settings.ItemRecycleFilter;
+        public ICollection<PokemonId> PokemonsToEvolve => _settings.PokemonsToEvolve;
+        public ICollection<PokemonId> PokemonsNotToTransfer => _settings.PokemonsNotToTransfer;
+        public ICollection<PokemonId> PokemonsNotToCatch => _settings.PokemonsToIgnore;
+        public ICollection<PokemonId> PokemonToUseMasterball => _settings.PokemonToUseMasterball;
+        public Dictionary<PokemonId, TransferFilter> PokemonsTransferFilter => _settings.PokemonsTransferFilter;
+        public bool StartupWelcomeDelay => _settings.StartupWelcomeDelay;
+        public bool SnipeAtPokestops => _settings.SnipeAtPokestops;
+        public int MinPokeballsToSnipe => _settings.MinPokeballsToSnipe;
+        public int MinPokeballsWhileSnipe => _settings.MinPokeballsWhileSnipe;
+        public int MaxPokeballsPerPokemon => _settings.MaxPokeballsPerPokemon;
+
+        public SnipeSettings PokemonToSnipe => _settings.PokemonToSnipe;
+        public string SnipeLocationServer => _settings.SnipeLocationServer;
+        public int SnipeLocationServerPort => _settings.SnipeLocationServerPort;
+        public bool GetSniperInfoFromPokezz => _settings.GetSniperInfoFromPokezz;
+        public bool GetOnlyVerifiedSniperInfoFromPokezz => _settings.GetOnlyVerifiedSniperInfoFromPokezz;
+        public bool UseSnipeLocationServer => _settings.UseSnipeLocationServer;
+        public bool UseSnipeOnlineLocationServer => _settings.UseSnipeOnlineLocationServer;
+        public bool UseTransferIvForSnipe => _settings.UseTransferIvForSnipe;
+        public bool SnipeIgnoreUnknownIv => _settings.SnipeIgnoreUnknownIv;
+        public int MinDelayBetweenSnipes => _settings.MinDelayBetweenSnipes;
+        public double SnipingScanOffset => _settings.SnipingScanOffset;
+        public bool SnipePokemonNotInPokedex => _settings.SnipePokemonNotInPokedex;
+        public int TotalAmountOfPokeballsToKeep => _settings.TotalAmountOfPokeballsToKeep;
+        public int TotalAmountOfPotionsToKeep => _settings.TotalAmountOfPotionsToKeep;
+        public int TotalAmountOfRevivesToKeep => _settings.TotalAmountOfRevivesToKeep;
+        public int TotalAmountOfBerriesToKeep => _settings.TotalAmountOfBerriesToKeep;
     }
-  }
-
-  public class ClientSettings : ISettings
-  {
-    // Never spawn at the same position.
-    private readonly Random _rand = new Random();
-    private readonly GlobalSettings _settings;
-
-    public ClientSettings(GlobalSettings settings)
-    {
-      _settings = settings;
-    }
-
-
-    public string GoogleUsername => _settings.Auth.GoogleUsername;
-    public string GooglePassword => _settings.Auth.GooglePassword;
-
-    public string GoogleRefreshToken
-    {
-      get { return null; }
-      set { GoogleRefreshToken = null; }
-    }
-    AuthType ISettings.AuthType
-    {
-      get { return _settings.Auth.AuthType; }
-
-      set { _settings.Auth.AuthType = value; }
-    }
-
-    double ISettings.DefaultLatitude
-    {
-      get
-      {
-        return _settings.DefaultLatitude + _rand.NextDouble() * ((double)_settings.MaxSpawnLocationOffset / 111111);
-      }
-
-      set { _settings.DefaultLatitude = value; }
-    }
-
-    double ISettings.DefaultLongitude
-    {
-      get
-      {
-        return _settings.DefaultLongitude +
-               _rand.NextDouble() *
-               ((double)_settings.MaxSpawnLocationOffset / 111111 / Math.Cos(_settings.DefaultLatitude));
-      }
-
-      set { _settings.DefaultLongitude = value; }
-    }
-
-    double ISettings.DefaultAltitude
-    {
-      get { return _settings.DefaultAltitude; }
-
-      set { _settings.DefaultAltitude = value; }
-    }
-
-    string ISettings.GoogleUsername
-    {
-      get { return _settings.Auth.GoogleUsername; }
-
-      set { _settings.Auth.GoogleUsername = value; }
-    }
-
-    string ISettings.GooglePassword
-    {
-      get { return _settings.Auth.GooglePassword; }
-
-      set { _settings.Auth.GooglePassword = value; }
-    }
-
-    string ISettings.PtcUsername
-    {
-      get { return _settings.Auth.PtcUsername; }
-
-      set { _settings.Auth.PtcUsername = value; }
-    }
-
-    string ISettings.PtcPassword
-    {
-      get { return _settings.Auth.PtcPassword; }
-
-      set { _settings.Auth.PtcPassword = value; }
-    }
-  }
-
-  public class LogicSettings : ILogicSettings
-  {
-    private readonly GlobalSettings _settings;
-
-    public LogicSettings(GlobalSettings settings)
-    {
-      _settings = settings;
-    }
-
-    public string ProfilePath => _settings.ProfilePath;
-    public string ProfileConfigPath => _settings.ProfileConfigPath;
-    public string GeneralConfigPath => _settings.GeneralConfigPath;
-    public bool AutoUpdate => _settings.AutoUpdate;
-    public bool TransferConfigAndAuthOnUpdate => _settings.TransferConfigAndAuthOnUpdate;
-    public bool TransferWeakPokemon => _settings.TransferWeakPokemon;
-    public bool DisableHumanWalking => _settings.DisableHumanWalking;
-    public float KeepMinIvPercentage => _settings.KeepMinIvPercentage;
-    public string KeepMinOperator => _settings.KeepMinOperator;
-    public int KeepMinCp => _settings.KeepMinCp;
-    public int KeepMinLvl => _settings.KeepMinLvl;
-    public bool UseKeepMinLvl => _settings.UseKeepMinLvl;
-    public bool AutomaticallyLevelUpPokemon => _settings.AutomaticallyLevelUpPokemon;
-    public int AmountOfTimesToUpgradeLoop => _settings.AmountOfTimesToUpgradeLoop;
-    public string LevelUpByCPorIv => _settings.LevelUpByCPorIv;
-    public int GetMinStarDustForLevelUp => _settings.GetMinStarDustForLevelUp;
-    public bool UseLuckyEggConstantly => _settings.UseLuckyEggConstantly;
-    public bool UseIncenseConstantly => _settings.UseIncenseConstantly;
-    public int UseBerriesMinCp => _settings.UseBerriesMinCp;
-    public float UseBerriesMinIv => _settings.UseBerriesMinIv;
-    public double UseBerriesBelowCatchProbability => _settings.UseBerriesBelowCatchProbability;
-    public string UseBerriesOperator => _settings.UseBerriesOperator;
-    public float UpgradePokemonIvMinimum => _settings.UpgradePokemonIvMinimum;
-    public float UpgradePokemonCpMinimum => _settings.UpgradePokemonCpMinimum;
-    public string UpgradePokemonMinimumStatsOperator => _settings.UpgradePokemonMinimumStatsOperator;
-    public double WalkingSpeedInKilometerPerHour => _settings.WalkingSpeedInKilometerPerHour;
-    public bool EvolveAllPokemonWithEnoughCandy => _settings.EvolveAllPokemonWithEnoughCandy;
-    public bool KeepPokemonsThatCanEvolve => _settings.KeepPokemonsThatCanEvolve;
-    public bool TransferDuplicatePokemon => _settings.TransferDuplicatePokemon;
-    public bool TransferDuplicatePokemonOnCapture => _settings.TransferDuplicatePokemonOnCapture;
-    public bool UseEggIncubators => _settings.UseEggIncubators;
-    public int UseGreatBallAboveCp => _settings.UseGreatBallAboveCp;
-    public int UseUltraBallAboveCp => _settings.UseUltraBallAboveCp;
-    public int UseMasterBallAboveCp => _settings.UseMasterBallAboveCp;
-    public double UseGreatBallAboveIv => _settings.UseGreatBallAboveIv;
-    public double UseUltraBallAboveIv => _settings.UseUltraBallAboveIv;
-    public double UseMasterBallBelowCatchProbability => _settings.UseMasterBallBelowCatchProbability;
-    public double UseUltraBallBelowCatchProbability => _settings.UseUltraBallBelowCatchProbability;
-    public double UseGreatBallBelowCatchProbability => _settings.UseGreatBallBelowCatchProbability;
-    public bool EnableHumanizedThrows => _settings.EnableHumanizedThrows;
-    public int NiceThrowChance => _settings.NiceThrowChance;
-    public int GreatThrowChance => _settings.GreatThrowChance;
-    public int ExcellentThrowChance => _settings.ExcellentThrowChance;
-    public int CurveThrowChance => _settings.CurveThrowChance;
-    public double ForceGreatThrowOverIv => _settings.ForceGreatThrowOverIv;
-    public double ForceExcellentThrowOverIv => _settings.ForceExcellentThrowOverIv;
-    public int ForceGreatThrowOverCp => _settings.ForceGreatThrowOverCp;
-    public int ForceExcellentThrowOverCp => _settings.ForceExcellentThrowOverCp;
-    public int DelayBetweenPokemonCatch => _settings.DelayBetweenPokemonCatch;
-    public int DelayBetweenPlayerActions => _settings.DelayBetweenPlayerActions;
-    public bool UsePokemonToNotCatchFilter => _settings.UsePokemonToNotCatchFilter;
-    public bool UsePokemonSniperFilterOnly => _settings.UsePokemonSniperFilterOnly;
-    public int KeepMinDuplicatePokemon => _settings.KeepMinDuplicatePokemon;
-    public bool PrioritizeIvOverCp => _settings.PrioritizeIvOverCp;
-    public int MaxTravelDistanceInMeters => _settings.MaxTravelDistanceInMeters;
-    public string GpxFile => _settings.GpxFile;
-    public bool UseGpxPathing => _settings.UseGpxPathing;
-    public bool UseLuckyEggsWhileEvolving => _settings.UseLuckyEggsWhileEvolving;
-    public int UseLuckyEggsMinPokemonAmount => _settings.UseLuckyEggsMinPokemonAmount;
-    public bool EvolveAllPokemonAboveIv => _settings.EvolveAllPokemonAboveIv;
-    public float EvolveAboveIvValue => _settings.EvolveAboveIvValue;
-    public bool RenamePokemon => _settings.RenamePokemon;
-    public bool RenameOnlyAboveIv => _settings.RenameOnlyAboveIv;
-    public float FavoriteMinIvPercentage => _settings.FavoriteMinIvPercentage;
-    public bool AutoFavoritePokemon => _settings.AutoFavoritePokemon;
-    public string RenameTemplate => _settings.RenameTemplate;
-    public int AmountOfPokemonToDisplayOnStart => _settings.AmountOfPokemonToDisplayOnStart;
-    public bool DumpPokemonStats => _settings.DumpPokemonStats;
-    public string TranslationLanguageCode => _settings.TranslationLanguageCode;
-    public bool ShowPokeballCountsBeforeRecycle => _settings.ShowPokeballCountsBeforeRecycle;
-    public bool VerboseRecycling => _settings.VerboseRecycling;
-    public double RecycleInventoryAtUsagePercentage => _settings.RecycleInventoryAtUsagePercentage;
-    public double EvolveKeptPokemonsAtStorageUsagePercentage => _settings.EvolveKeptPokemonsAtStorageUsagePercentage;
-    public ICollection<KeyValuePair<ItemId, int>> ItemRecycleFilter => _settings.ItemRecycleFilter;
-    public ICollection<PokemonId> PokemonsToEvolve => _settings.PokemonsToEvolve;
-    public ICollection<PokemonId> PokemonsNotToTransfer => _settings.PokemonsNotToTransfer;
-    public ICollection<PokemonId> PokemonsNotToCatch => _settings.PokemonsToIgnore;
-    public ICollection<PokemonId> PokemonToUseMasterball => _settings.PokemonToUseMasterball;
-    public Dictionary<PokemonId, TransferFilter> PokemonsTransferFilter => _settings.PokemonsTransferFilter;
-    public bool StartupWelcomeDelay => _settings.StartupWelcomeDelay;
-    public bool SnipeAtPokestops => _settings.SnipeAtPokestops;
-    public int MinPokeballsToSnipe => _settings.MinPokeballsToSnipe;
-    public int MinPokeballsWhileSnipe => _settings.MinPokeballsWhileSnipe;
-    public int MaxPokeballsPerPokemon => _settings.MaxPokeballsPerPokemon;
-
-    public SnipeSettings PokemonToSnipe => _settings.PokemonToSnipe;
-    public string SnipeLocationServer => _settings.SnipeLocationServer;
-    public int SnipeLocationServerPort => _settings.SnipeLocationServerPort;
-    public bool GetSniperInfoFromPokezz => _settings.GetSniperInfoFromPokezz;
-    public bool GetOnlyVerifiedSniperInfoFromPokezz => _settings.GetOnlyVerifiedSniperInfoFromPokezz;
-    public bool UseSnipeLocationServer => _settings.UseSnipeLocationServer;
-    public bool UseSnipeOnlineLocationServer => _settings.UseSnipeOnlineLocationServer;
-    public bool UseTransferIvForSnipe => _settings.UseTransferIvForSnipe;
-    public bool SnipeIgnoreUnknownIv => _settings.SnipeIgnoreUnknownIv;
-    public int MinDelayBetweenSnipes => _settings.MinDelayBetweenSnipes;
-    public double SnipingScanOffset => _settings.SnipingScanOffset;
-    public int TotalAmountOfPokeballsToKeep => _settings.TotalAmountOfPokeballsToKeep;
-    public int TotalAmountOfPotionsToKeep => _settings.TotalAmountOfPotionsToKeep;
-    public int TotalAmountOfRevivesToKeep => _settings.TotalAmountOfRevivesToKeep;
-    public int TotalAmountOfBerriesToKeep => _settings.TotalAmountOfBerriesToKeep;
-
-    public bool NurxEnabled => _settings.NurxEnabled;
-    public int NurxWebSocketPort => _settings.NurxWebSocketPort;
-    public string NurxUsername => _settings.NurxUsername;
-    public string NurxPassword => _settings.NurxPassword;
-  }
 }
