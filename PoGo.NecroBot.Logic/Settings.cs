@@ -317,6 +317,7 @@ namespace PoGo.NecroBot.Logic
     public bool UsePokemonSniperFilterOnly;
     [DefaultValue(14251)]
     public int WebSocketPort;
+
     [DefaultValue(false)]
     public bool NurxEnabled;
     [DefaultValue(14151)]
@@ -325,6 +326,7 @@ namespace PoGo.NecroBot.Logic
     public string NurxUsername;
     [DefaultValue("")]
     public string NurxPassword;
+
     public List<KeyValuePair<ItemId, int>> ItemRecycleFilter = new List<KeyValuePair<ItemId, int>>
         {
             new KeyValuePair<ItemId, int>(ItemId.ItemUnknown, 0),
@@ -975,5 +977,10 @@ namespace PoGo.NecroBot.Logic
     public int TotalAmountOfPotionsToKeep => _settings.TotalAmountOfPotionsToKeep;
     public int TotalAmountOfRevivesToKeep => _settings.TotalAmountOfRevivesToKeep;
     public int TotalAmountOfBerriesToKeep => _settings.TotalAmountOfBerriesToKeep;
+
+    public bool NurxEnabled => _settings.NurxEnabled;
+    public int NurxWebSocketPort => _settings.NurxWebSocketPort;
+    public string NurxUsername => _settings.NurxUsername;
+    public string NurxPassword => _settings.NurxPassword;
   }
 }
