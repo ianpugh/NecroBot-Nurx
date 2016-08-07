@@ -102,7 +102,7 @@ namespace PoGo.NecroBot.CLI.Nurx
             _websocket = new WebSocketServer();
 
             // Create websockets server setup.
-            var config = new ServerConfig
+            /*var config = new ServerConfig
             {
                 Name = "NurxWebSocket",
                 Certificate = new CertificateConfig
@@ -113,10 +113,10 @@ namespace PoGo.NecroBot.CLI.Nurx
                 Port = _settings.NurxWebSocketPort,
                 Security = "tls",
                 Ip = "Any"
-            };
+            };*/
 
             // Setup the appServer
-            if (!_websocket.Setup(config))
+            if (!_websocket.Setup(_settings.NurxWebSocketPort))
             {
                 Logger.Write("Failed to setup Nurx Websockets server.", Logic.Logging.LogLevel.Error);                
                 return false;
