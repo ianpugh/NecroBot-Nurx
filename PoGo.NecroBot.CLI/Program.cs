@@ -10,10 +10,10 @@ using PoGo.NecroBot.Logic.Logging;
 using PoGo.NecroBot.Logic.State;
 using PoGo.NecroBot.Logic.Tasks;
 using PoGo.NecroBot.Logic.Utils;
-using PoGo.NecroBot.CLI.Nurx;
+using System.IO;
 using System.Net;
 using PoGo.NecroBot.CLI.Resources;
-using System.IO;
+using System.Reflection;
 
 #endregion
 
@@ -46,7 +46,7 @@ namespace PoGo.NecroBot.CLI
                 subPath = args[0];
 
             var logger = new ConsoleLogger(LogLevel.Info);
-            Logger.SetLogger(logger, subPath);
+            Logger.SetLogger(new ConsoleLogger(LogLevel.New), subPath);
 
 
             if( CheckKillSwitch() )
@@ -163,12 +163,17 @@ namespace PoGo.NecroBot.CLI
             session.Navigation.UpdatePositionEvent +=
                 (lat, lng) => session.EventDispatcher.Send(new UpdatePositionEvent {Latitude = lat, Longitude = lng});
             session.Navigation.UpdatePositionEvent += Navigation_UpdatePositionEvent;
+
             ProgressBar.fill(100);
 
             machine.AsyncStart(new VersionCheckState(), session);
             if (session.LogicSettings.UseSnipeLocationServer)
                 SnipePokemonTask.AsyncStart(session);
-            Console.Clear();
+
+            try {
+                Console.Clear();
+            }
+            catch (IOException) { }
 
             QuitEvent.WaitOne();
         }
