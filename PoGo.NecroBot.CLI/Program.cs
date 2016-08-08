@@ -14,6 +14,7 @@ using System.IO;
 using System.Net;
 using PoGo.NecroBot.CLI.Resources;
 using System.Reflection;
+using PoGo.NecroBot.CLI.Nurx;
 
 #endregion
 
